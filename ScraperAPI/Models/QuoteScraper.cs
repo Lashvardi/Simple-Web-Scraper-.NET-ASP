@@ -24,30 +24,47 @@ namespace ScraperAPI.Services
                 var context = scope.ServiceProvider.GetRequiredService<QuoteDbContext>();
 
                 var web = new HtmlWeb();
-                var doc = web.Load("https://quotes.toscrape.com/");
+                var page = 1;
+                var hasNextPage = true;
 
-                var quotes = new List<ScrapedQuote>();
-
-                foreach (var node in doc.DocumentNode.SelectNodes("//div[@class='quote']"))
+                while (hasNextPage)
                 {
-                    var textNode = node.SelectSingleNode(".//span[@class='text']");
-                    var authorNode = node.SelectSingleNode(".//small[@class='author']");
+                    var doc = web.Load($"https://quotes.toscrape.com/page/{page}/");
 
-                    var quote = new ScrapedQuote
+                    var quotes = new List<ScrapedQuote>();
+
+                    foreach (var node in doc.DocumentNode.SelectNodes("//div[@class='quote']"))
                     {
-                        Text = textNode?.InnerText.Trim(),
-                        Author = authorNode?.InnerText.Trim()
-                    };
+                        var textNode = node.SelectSingleNode(".//span[@class='text']");
+                        var authorNode = node.SelectSingleNode(".//small[@class='author']");
 
-                    quotes.Add(quote);
-                }
+                        var quote = new ScrapedQuote
+                        {
+                            Text = textNode?.InnerText.Trim(),
+                            Author = authorNode?.InnerText.Trim()
+                        };
 
-                var newQuotes = quotes.Where(q => !context.ScrapedQuotes.Any(sq => sq.Text == q.Text && sq.Author == q.Author)).ToList();
+                        quotes.Add(quote);
+                    }
 
-                if (newQuotes.Any())
-                {
-                    context.ScrapedQuotes.AddRange(newQuotes);
-                    context.SaveChanges();
+                    var newQuotes = quotes.Where(q => !context.ScrapedQuotes.Any(sq => sq.Text == q.Text && sq.Author == q.Author)).ToList();
+
+                    if (newQuotes.Any())
+                    {
+                        context.ScrapedQuotes.AddRange(newQuotes);
+                        context.SaveChanges();
+                    }
+
+                    var nextPageLink = doc.DocumentNode.SelectSingleNode("//li[@class='next']/a");
+
+                    if (nextPageLink == null)
+                    {
+                        hasNextPage = false;
+                    }
+                    else
+                    {
+                        page++;
+                    }
                 }
             }
         }
